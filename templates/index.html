@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Analyse | Abalone Marathon de Nantes {{ current_year }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap');
+
+        :root { 
+            --nantes-red: #da291c; 
+            --nantes-dark: #b51f15; 
+            --bg-body: #f4f7f6; 
+            --card-bg: #ffffff;
+            --card-radius: 20px; 
+            --text-main: #334155;
+            --text-muted: #64748b;
+        }
+        
+        body { 
+            background-color: var(--bg-body); 
+            font-family: 'Inter', -apple-system, sans-serif !important; 
+            color: var(--text-main);
+        }
+        
+        .navbar { 
+            background-color: var(--nantes-red); 
+            color: white; 
+            padding: 1.2rem 0;
+            border-bottom: 4px solid var(--nantes-dark);
+        }
+        
+        .navbar-brand-custom { text-align: left; line-height: 1.1; }
+        .navbar-brand-custom .main-title { font-size: 1.8rem; font-weight: 800; letter-spacing: -0.02em; text-transform: uppercase; display: block; color: white; }
+        .navbar-brand-custom .sub-brand { font-weight: 400; font-size: 1.05rem; opacity: 0.95; display: block; margin-top: 4px; text-transform: none; color: white; }
+
+        .year-switch .btn { font-weight: 600; border: 1px solid rgba(255, 255, 255, 0.4); color: rgba(255, 255, 255, 0.8); border-radius: 8px; margin: 0 4px; transition: all 0.2s; }
+        .year-switch .btn:hover { color: white; border-color: white; }
+        .year-switch .btn.active-year { background-color: white; color: var(--nantes-red); border-color: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        
+        .card { border: none; border-radius: var(--card-radius); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04); background-color: var(--card-bg); margin-bottom: 1.5rem; overflow: hidden; }
+        .card-header-flat { background-color: transparent; border-bottom: 1px solid #f1f5f9; padding: 1.2rem 1.5rem; }
+        .box-title { font-size: 1.25rem; font-weight: 600 !important; color: var(--text-main); margin-bottom: 0; text-transform: none !important; }
+
+        .card-kpi { border-top: none; height: 100%; display: flex; flex-direction: column; justify-content: center; position: relative; }
+        .card-kpi::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 4px; background-color: var(--nantes-red); }
+        .kpi-value { font-size: 2.2rem; font-weight: 600; letter-spacing: -0.5px; color: var(--text-main); }
+        .kpi-value.text-danger { color: var(--nantes-red) !important; }
+        .explication-text { font-size: 0.75rem; color: var(--text-muted); margin-top: 12px; line-height: 1.4; display: block; border-top: 1px dashed #e2e8f0; padding-top: 10px; }
+        
+        .delta-badge { font-size: 0.75rem; font-weight: 600; padding: 3px 8px; border-radius: 12px; margin-top: 5px; display: inline-block; }
+        .delta-positive { background-color: #dcfce7; color: #166534; }
+        .delta-negative { background-color: #fee2e2; color: #991b1b; }
+        
+        #map { height: 480px; background-color: #e5e7eb; border-radius: 0; }
+        .runner-marker { color: white; border-radius: 50%; border: 2px solid white; text-align: center; font-weight: bold; line-height: 20px; font-size: 12px; }
+        
+        .input-group-flat { border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #f8fafc; }
+        .input-group-flat input { background-color: transparent; }
+        .input-group-flat input:focus { box-shadow: none; border-color: transparent; }
+
+        #searchResults { position: absolute; z-index: 9999; width: 100%; top: 100%; left: 0; margin-top: 4px; display: none; max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); background: white; }
+        .list-group-item { border-color: #f1f5f9; font-size: 0.9rem; }
+        .list-group-item:hover { background-color: #f8fafc; cursor: pointer; color: var(--nantes-red); }
+        
+        .runner-badge { font-size: 0.85rem; padding: 6px 14px; margin: 4px 4px 4px 0; border-radius: 20px; display: inline-flex; align-items: center; color: white; font-weight: 500; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .runner-badge span.close-btn { cursor: pointer; font-weight: bold; margin-left: 8px; padding-left: 8px; border-left: 1px solid rgba(255,255,255,0.4); }
+        .speed-pill { font-size: 0.75rem; font-family: 'Courier New', Courier, monospace; background: rgba(255,255,255,0.9); color: #333; padding: 2px 8px; margin-left: 8px; border-radius: 10px; font-weight: bold; }
+        
+        .player-box { padding: 15px 20px; background: white; }
+        .speed-control { display: flex; align-items: center; background: #f8fafc; padding: 6px 16px; border-radius: 20px; border: 1px solid #e2e8f0; }
+        
+        .custom-slider { -webkit-appearance: none; appearance: none; width: 100%; height: 8px; border-radius: 4px; background: #e2e8f0; outline: none; cursor: pointer; margin: 10px 0; }
+        .custom-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: var(--nantes-red); border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .custom-slider::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: var(--nantes-red); border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        
+        .btn { border-radius: 12px; box-shadow: none !important; font-size: 0.85rem; font-weight: 600;}
+        .btn-outline-danger { color: var(--nantes-red); border-color: var(--nantes-red); }
+        .btn-outline-danger:hover { background-color: var(--nantes-red); color: white; }
+        .btn-danger { background-color: var(--nantes-red); border-color: var(--nantes-red); }
+        .btn-outline-primary { color: #2563eb; border-color: #2563eb; }
+        .btn-outline-primary:hover { background-color: #2563eb; color: white; }
+        
+        .master-switch .btn { font-weight: 500; border-color: #e2e8f0; color: var(--text-main); border-radius: 8px;}
+        .master-switch .btn-check:checked + .btn { background-color: var(--text-main); color: white; border-color: var(--text-main); }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar mb-5 shadow-sm">
+        <div class="container d-flex justify-content-between align-items-center">
+            <div class="navbar-brand-custom">
+                <span class="main-title">Marathon de Nantes {{ current_year }}</span>
+                <span class="sub-brand">Analyse interactive des données finishers</span>
+            </div>
+            <div class="d-flex align-items-center">
+                <div class="btn-group year-switch" role="group">
+                    <a href="/?year=2025" class="btn {% if current_year == '2025' %}active-year{% endif %}">Édition 2025</a>
+                    <a href="/?year=2026" class="btn {% if current_year == '2026' %}active-year{% endif %}">Édition 2026</a>
+                </div>
+                <div class="ms-3">
+                    <img src="{{ url_for('static', filename='logo.avif') }}" 
+                         alt="Logo" 
+                         style="max-height: 55px; width: auto; display: block;">
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        
+        <!-- SECTION KPIs -->
+        <div class="row g-4 mb-4 text-center align-items-stretch">
+            <div class="col-md-3">
+                <div class="card card-kpi p-4">
+                    <h6 class="mb-2 text-muted fw-medium">Finishers</h6>
+                    <h2 class="mb-0 kpi-value">{{ metrics.total }}</h2>
+                    {% if current_year == '2026' and deltas.total %}
+                        <div><span class="delta-badge {% if deltas.total > 0 %}delta-positive{% else %}delta-negative{% endif %}">
+                            {% if deltas.total > 0 %}↗ +{{ deltas.total }}{% else %}↘ {{ deltas.total }}{% endif %} vs 2025
+                        </span></div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card card-kpi p-4">
+                    <h6 class="mb-2 text-muted fw-medium">Vitesse moyenne & médiane</h6>
+                    <div class="d-flex justify-content-center gap-4 align-items-baseline">
+                        <div>
+                            <span class="d-block kpi-value fs-3 text-danger">{{ vitesse_moy_str }}</span>
+                            <span class="text-muted" style="font-size: 0.75rem;">Moy.</span>
+                        </div>
+                        <div class="border-start border-2 ps-4">
+                            <span class="d-block kpi-value fs-3">{{ vitesse_med_str }}</span>
+                            <span class="text-muted" style="font-size: 0.75rem;">Méd.</span>
+                        </div>
+                    </div>
+                    {% if current_year == '2026' and deltas.vitesse_moy %}
+                        <div class="mt-2"><span class="delta-badge {% if deltas.vitesse_moy > 0 %}delta-positive{% else %}delta-negative{% endif %}">
+                            Moyenne : {% if deltas.vitesse_moy > 0 %}↗ +{{ "%.2f"|format(deltas.vitesse_moy) }}{% else %}↘ {{ "%.2f"|format(deltas.vitesse_moy) }}{% endif %} km/h vs 2025
+                        </span></div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card card-kpi p-4">
+                    <div class="d-flex justify-content-between h-100 align-items-center">
+                        <div class="flex-grow-1">
+                            <h6 class="mb-2 text-muted fw-medium" style="font-size:0.85rem;">Negative Split</h6>
+                            <h2 class="mb-0 kpi-value text-success" style="font-size:1.8rem;">{{ pct_neg_str }}%</h2>
+                            {% if current_year == '2026' and deltas.pct_neg %}
+                                <div><span class="delta-badge {% if deltas.pct_neg > 0 %}delta-positive{% else %}delta-negative{% endif %}">
+                                    {% if deltas.pct_neg > 0 %}↗ +{{ "%.1f"|format(deltas.pct_neg) }}{% else %}↘ {{ "%.1f"|format(deltas.pct_neg) }}{% endif %} pts
+                                </span></div>
+                            {% endif %}
+                        </div>
+                        <div class="border-start ps-3 flex-grow-1">
+                            <h6 class="mb-2 text-muted fw-medium" style="font-size:0.85rem;">Femmes</h6>
+                            <h2 class="mb-0 kpi-value" style="font-size:1.8rem; color: #e83e8c;">{{ pct_femmes_str }}%</h2>
+                            {% if current_year == '2026' and deltas.pct_femmes %}
+                                <div><span class="delta-badge {% if deltas.pct_femmes > 0 %}delta-positive{% else %}delta-negative{% endif %}">
+                                    {% if deltas.pct_femmes > 0 %}↗ +{{ "%.1f"|format(deltas.pct_femmes) }}{% else %}↘ {{ "%.1f"|format(deltas.pct_femmes) }}{% endif %} pts
+                                </span></div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card card-kpi py-2 px-3 text-start">
+                    <div class="mb-2">
+                        <h6 class="mb-0 text-muted fw-medium" style="font-size:0.8rem;">Le Mur (>30% perte allure)</h6>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="kpi-value text-danger" style="font-size:1.5rem;">{{ pct_murs_str }}%</span>
+                            {% if current_year == '2026' and deltas.pct_murs %}
+                                <span class="delta-badge {% if deltas.pct_murs < 0 %}delta-positive{% else %}delta-negative{% endif %} m-0">
+                                    {% if deltas.pct_murs > 0 %}↗ +{{ "%.1f"|format(deltas.pct_murs) }}{% else %}↘ {{ "%.1f"|format(deltas.pct_murs) }}{% endif %} pts
+                                </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="border-top pt-2">
+                        <h6 class="mb-0 text-muted fw-medium" style="font-size:0.8rem;">Coup de chaud (>15% perte)</h6>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="kpi-value text-warning" style="font-size:1.5rem;">{{ pct_murs_15_str }}%</span>
+                            {% if current_year == '2026' and deltas.pct_murs_15 %}
+                                <span class="delta-badge {% if deltas.pct_murs_15 < 0 %}delta-positive{% else %}delta-negative{% endif %} m-0">
+                                    {% if deltas.pct_murs_15 > 0 %}↗ +{{ "%.1f"|format(deltas.pct_murs_15) }}{% else %}↘ {{ "%.1f"|format(deltas.pct_murs_15) }}{% endif %} pts
+                                </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- REPLAY -->
+        <div class="card mb-5">
+            <div class="card-header-flat pt-4 pb-3">
+                <div class="row align-items-center">
+                    <div class="col-md-4">
+                        <h2 class="box-title px-2">Carte interactive & Replay</h2>
+                        <p class="text-muted px-2 mb-3 mb-md-0" style="font-size: 0.8rem;">Approximation basée sur les allures sur chaque segment</p>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="d-flex flex-column flex-md-row gap-2">
+                            <div class="position-relative flex-grow-1">
+                                <div class="input-group input-group-flat">
+                                    <span class="input-group-text border-0 text-muted bg-transparent">🔍</span>
+                                    <input type="text" id="searchInput" class="form-control border-0 py-2 bg-transparent" placeholder="Chercher un nom ou un dossard..." oninput="searchRunner()">
+                                </div>
+                                <ul class="list-group" id="searchResults"></ul>
+                            </div>
+                            <div class="d-flex gap-2 mt-2 mt-md-0">
+                                {% if current_year == '2026' and vainqueur_2025 != "" %}
+                                    <button class="btn btn-outline-primary flex-grow-1 flex-md-grow-0 text-nowrap" onclick="startDuel()">⚔️ Duel Vainqueurs 25/26</button>
+                                {% endif %}
+                                <button class="btn btn-outline-danger flex-grow-1 flex-md-grow-0 text-nowrap" onclick="searchAndAdd('{{ metrics.vainqueur_dos }}')">🥇 Vainqueur {{ current_year }}</button>
+                                <button class="btn btn-light border text-dark flex-grow-1 flex-md-grow-0" onclick="clearAll()">🗑️ Effacer</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-2 px-2" id="activeRunnersBox"></div>
+            </div>
+
+            <div id="map" class="border-top border-bottom"></div>
+
+            <div class="player-box bg-light">
+                <div class="row align-items-center mb-2">
+                    <div class="col-md-4">
+                        <h3 class="mb-0 text-danger" id="timeDisplay" style="font-variant-numeric: tabular-nums; font-weight: 600;">⏱️ 00:00:00</h3>
+                    </div>
+                    <div class="col-md-8 text-md-end d-flex justify-content-md-end justify-content-center align-items-center flex-wrap gap-2">
+                        <div class="speed-control">
+                            <label class="me-2 text-muted small mb-0">Vitesse</label>
+                            <input type="range" id="speedSlider" class="custom-slider" min="0.5" max="10" step="0.5" value="1" style="width: 100px;" 
+                                   oninput="document.getElementById('speedValue').innerText = parseFloat(this.value).toFixed(1) + 'x'">
+                            <span id="speedValue" class="ms-2 text-dark small font-monospace" style="width: 35px; text-align: left;">1.0x</span>
+                        </div>
+                        <button class="btn btn-white border px-3 bg-white" onclick="restartReplay()" title="Revenir au début">⏮️ Début</button>
+                        <button class="btn btn-danger px-4" id="playBtn" onclick="togglePlay()">▶️ Lecture</button>
+                    </div>
+                </div>
+                <input type="range" class="custom-slider mt-2 mb-2" id="timeSlider" min="0" max="21600" value="0" step="1">
+            </div>
+            
+            <div class="p-3 bg-white border-top">
+                <h6 class="mb-2 text-muted small px-2 fw-medium">Profil altimétrique & position</h6>
+                <div style="height: 100px;"><canvas id="elevationChart"></canvas></div>
+            </div>
+        </div>
+
+        <div class="row mb-5 g-4">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header-flat"><h2 class="box-title">Évolution des vitesses (km/h)</h2></div>
+                    <div class="card-body">
+                        <div style="height: 280px;"><canvas id="paceChart"></canvas></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header-flat"><h2 class="box-title">Évolution du classement</h2></div>
+                    <div class="card-body position-relative">
+                        <div id="rankChartWarning" class="position-absolute w-100 h-100 top-0 start-0 bg-white d-flex align-items-center justify-content-center" style="display:none; z-index: 10;">
+                            <p class="text-muted text-center px-4" style="font-size:0.9rem;">
+                                <em>Graphique désactivé lors d'un duel inter-années.</em>
+                            </p>
+                        </div>
+                        <div style="height: 280px;" id="rankChartContainer"><canvas id="rankChart"></canvas></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ANALYSE DES DÉFAILLANCES (MURS ET EXPLOSIONS) -->
+        <div class="row mb-5 g-4">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header-flat"><h2 class="box-title">L'Hécatombe (KM 30 - 37)</h2>
+                    <p class="text-muted small mb-0">Répartition des variations d'allure sur ce segment.</p></div>
+                    <div class="card-body">
+                        <div style="height: 280px;"><canvas id="murChart"></canvas></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header-flat"><h2 class="box-title">Chronologie des craquages</h2>
+                    <p class="text-muted small mb-0">% du peloton perdant +15% de vitesse par segment.</p></div>
+                    <div class="card-body">
+                        <div style="height: 280px;"><canvas id="explosionChart"></canvas></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- NEGATIVE SPLITS -->
+        <div class="card mb-5">
+            <div class="card-header-flat pt-4 pb-2">
+                <h2 class="box-title mb-1">Top 10 Negative Split 🚀</h2>
+                <p class="text-muted small mb-0">Les coureurs complets ayant le plus accéléré sur le 2ème semi-marathon.</p>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-borderless align-middle text-center mb-0" style="font-size: 0.9rem;">
+                        <thead class="table-light text-muted border-bottom" style="font-size: 0.8rem;">
+                            <tr>
+                                <th class="text-start ps-4">Coureur</th>
+                                <th>Classement</th>
+                                <th>Temps Final</th>
+                                <th>1er Semi (Temps)</th>
+                                <th>1er Semi (Allure)</th>
+                                <th>2ème Semi (Temps)</th>
+                                <th>2ème Semi (Allure)</th>
+                                <th class="pe-4">Gain Vitesse</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for r in top_neg_splits %}
+                            <tr class="border-bottom">
+                                <td class="text-start ps-4 fw-medium text-dark">{{ r.Nom }}</td>
+                                <td>#{{ r.Classement }}</td>
+                                <td><span class="badge bg-light text-dark border font-monospace py-2" style="font-size: 0.85rem;">{{ r.Temps_Final }}</span></td>
+                                <td><span class="font-monospace text-muted">{{ r.Temps_S1 }}</span></td>
+                                <td>{{ r.Vitesse_S1_kmh }} km/h <br><span class="text-muted" style="font-size:0.75rem;">{{ r.Allure_S1 }}/km</span></td>
+                                <td><span class="font-monospace text-dark fw-bold">{{ r.Temps_S2 }}</span></td>
+                                <td><span class="fw-medium text-dark">{{ r.Vitesse_S2_kmh }} km/h</span> <br><span class="text-muted" style="font-size:0.75rem;">{{ r.Allure_S2 }}/km</span></td>
+                                <td class="pe-4"><span class="badge bg-success text-white py-2 px-3">+{{ r.Gain_Pct }}%</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-5">
+            <div class="card-header-flat pt-4 pb-3 d-flex flex-column flex-md-row justify-content-between align-items-center">
+                <h2 class="box-title mb-3 mb-md-0">Démographie & Temps</h2>
+                <div class="btn-group master-switch p-1 bg-light rounded-3" role="group">
+                    <input type="radio" class="btn-check" name="masterSwitch" id="btnSwitchSexe" autocomplete="off" checked onchange="toggleAll('sexe')">
+                    <label class="btn btn-outline-secondary btn-sm border-0" for="btnSwitchSexe">Par Sexe</label>
+                    <input type="radio" class="btn-check" name="masterSwitch" id="btnSwitchCat" autocomplete="off" onchange="toggleAll('cat')">
+                    <label class="btn btn-outline-secondary btn-sm border-0" for="btnSwitchCat">Par Catégorie</label>
+                </div>
+            </div>
+            <div class="card-body pt-3">
+                <div class="row align-items-center">
+                    <div class="col-md-4 border-end">
+                        <div style="height: 240px;"><canvas id="demoChart"></canvas></div>
+                    </div>
+                    <div class="col-md-8 pl-md-4 mt-4 mt-md-0">
+                        <div style="height: 260px;"><canvas id="distChart"></canvas></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <footer class="text-center mt-5 mb-4 pt-4 text-muted border-top">
+            <p class="mb-1 font-monospace small">Abalone Marathon de Nantes {{ current_year }} - Données des Finishers</p>
+            <p class="mb-1 small">Créé par <a href="https://www.linkedin.com/in/theophile-senechal/" target="_blank" class="text-decoration-none" style="color: var(--nantes-red);">Théophile Sénéchal</a></p>
+        </footer>
+    </div>
+
+    <script>
+        const currentYear = "{{ current_year }}";
+        const vainqueurDos2025 = "{{ vainqueur_2025 }}";
+        const vainqueurDosCurrent = "{{ metrics.vainqueur_dos }}";
+
+        const distLabels = {{ hist_labels|tojson }};
+        const distHommes = {{ hist_hommes|tojson }};
+        const distFemmes = {{ hist_femmes|tojson }};
+        const distCatData = {{ dist_cat_data|tojson }}; 
+        
+        const sexeLabels = {{ sexe_labels|tojson }};
+        const sexeValues = {{ sexe_values|tojson }};
+        const catLabels = {{ cat_labels|tojson }};
+        const catValues = {{ cat_values|tojson }};
+
+        const murLabels = {{ mur_labels|tojson }};
+        const murValues = {{ mur_values|tojson }};
+        const explosionsValues = {{ explosions_values|tojson }};
+
+        const rootStyle = getComputedStyle(document.body);
+        const nantesRed = rootStyle.getPropertyValue('--nantes-red').trim();
+        const textMain = rootStyle.getPropertyValue('--text-main').trim();
+
+        const catColors = [nantesRed, textMain, '#f59e0b', '#3b82f6']; 
+        const sexeColors = sexeLabels.map(l => l === 'M' ? '#0056b3' : l === 'F' ? '#e83e8c' : '#9ca3af'); 
+        
+        const murColorsCurrent = ['#22c55e', '#9ca3af', '#facc15', '#f97316', nantesRed];
+        const murColorsPrev = ['#bbf7d0', '#e2e8f0', '#fef08a', '#fdba74', '#fca5a5'];
+
+        const barDatasetsSexe = [
+            { label: 'Hommes', data: distHommes, backgroundColor: '#0056b3', borderRadius: 4 },
+            { label: 'Femmes', data: distFemmes, backgroundColor: '#e83e8c', borderRadius: 4 }
+        ];
+        const barDatasetsCat = Object.keys(distCatData).map((catName, index) => ({
+            label: catName, data: distCatData[catName], backgroundColor: catColors[index % catColors.length], borderRadius: 4
+        }));
+
+        Chart.defaults.font.family = "'Inter', -apple-system, sans-serif";
+        Chart.defaults.font.weight = '500';
+        Chart.defaults.color = "#64748b";
+        Chart.defaults.scale.grid.color = "#f1f5f9";
+
+        // CHARTS
+        const ctxDist = document.getElementById('distChart').getContext('2d');
+        let distChart = new Chart(ctxDist, {
+            type: 'bar', data: { labels: distLabels, datasets: barDatasetsSexe },
+            options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true, border: {display: false} } }, plugins: { legend: { position: 'top', labels: { boxWidth: 12, usePointStyle: true } } } }
+        });
+
+        const ctxDemo = document.getElementById('demoChart').getContext('2d');
+        let demoChart = new Chart(ctxDemo, {
+            type: 'doughnut', data: { labels: sexeLabels, datasets: [{ data: sexeValues, backgroundColor: sexeColors, borderWidth: 3, borderColor: '#fff' }] },
+            options: { maintainAspectRatio: false, cutout: '75%', plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, usePointStyle: true } } } }
+        });
+
+        const ctxMur = document.getElementById('murChart').getContext('2d');
+        let murChart = new Chart(ctxMur, {
+            type: 'bar',
+            data: { labels: murLabels, datasets: [{ label: currentYear, data: murValues, backgroundColor: murColorsCurrent, borderRadius: 6, borderWidth: 0 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'top' } }, scales: { x: { grid: { display: false }, ticks: {font: {weight: '600'}} }, y: { beginAtZero: true, border: {display: false} } } }
+        });
+
+        const ctxExplosion = document.getElementById('explosionChart').getContext('2d');
+        let explosionChart = new Chart(ctxExplosion, {
+            type: 'bar',
+            data: { labels: ['KM 21 ➔ 25', 'KM 25 ➔ 30', 'KM 30 ➔ 37', 'KM 37 ➔ 40'], datasets: [{ label: currentYear, data: explosionsValues, backgroundColor: nantesRed, borderRadius: 6, borderWidth: 0 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'top' } }, scales: { x: { grid: { display: false }, ticks: {font: {weight: '600'}} }, y: { beginAtZero: true, border: {display: false} } } }
+        });
+
+        if(currentYear === '2026') {
+            fetch('/api/mur_comparison').then(res => res.json()).then(data => {
+                if(data.mur_labels) {
+                    murChart.data.datasets.unshift({ label: '2025', data: data.mur_values, backgroundColor: murColorsPrev, borderRadius: 6, borderWidth: 0 });
+                    murChart.update();
+                    
+                    explosionChart.data.datasets.unshift({ label: '2025', data: data.explosions_values, backgroundColor: '#cbd5e1', borderRadius: 6, borderWidth: 0 });
+                    explosionChart.update();
+                }
+            });
+        }
+
+        function toggleAll(type) {
+            if(type === 'sexe') {
+                demoChart.data.labels = sexeLabels; demoChart.data.datasets[0].data = sexeValues; demoChart.data.datasets[0].backgroundColor = sexeColors; distChart.data.datasets = barDatasetsSexe;
+            } else {
+                demoChart.data.labels = catLabels; demoChart.data.datasets[0].data = catValues; demoChart.data.datasets[0].backgroundColor = catColors; distChart.data.datasets = barDatasetsCat;
+            }
+            demoChart.update(); distChart.update();
+        }
+
+        // MAP & REPLAY
+        const map = L.map('map').setView([47.218, -1.553], 13);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
+        
+        let gpxTrack = [];
+        let runners = {}; 
+        let isPlaying = false;
+        let playInterval;
+        let paceChart = null;
+        let rankChart = null;
+        let elevationChart = null;
+        const slider = document.getElementById('timeSlider');
+        const BASE_SPEED_STEP = 5; 
+        let currentPlaybackTime = 0; 
+        let markerColorIndex = 0;
+        const playerColors = [nantesRed, '#2563eb', '#10b981', '#f59e0b', '#8b5cf6', '#0ea5e9', '#ec4899'];
+
+        fetch('/api/gpx').then(res => res.json()).then(data => {
+            if(data.length > 0) {
+                gpxTrack = data;
+                const latlngs = data.map(pt => [pt.lat, pt.lng]);
+                L.polyline(latlngs, {color: '#94a3b8', weight: 4, opacity: 0.8}).addTo(map);
+                map.fitBounds(L.polyline(latlngs).getBounds());
+
+                const ctxEle = document.getElementById('elevationChart').getContext('2d');
+                elevationChart = new Chart(ctxEle, {
+                    type: 'line', data: { datasets: [{ type: 'line', data: gpxTrack.map(pt => ({x: pt.dist, y: pt.ele})), borderColor: '#cbd5e1', backgroundColor: 'rgba(209, 213, 219, 0.2)', fill: true, pointRadius: 0, borderWidth: 2, tension: 0 }] },
+                    options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { tooltip: { enabled: false }, legend: { display: false } }, scales: { x: { display: false, type: 'linear', max: 42.2 }, y: { display: false } }, layout: { padding: 0 } }
+                });
+            }
+        });
+
+        function searchRunner() {
+            const query = document.getElementById('searchInput').value;
+            const resultsBox = document.getElementById('searchResults');
+            if(query.length < 1) { resultsBox.style.display = 'none'; return; }
+
+            fetch(`/api/search?q=${query}&year=${currentYear}`).then(res => res.json()).then(data => {
+                resultsBox.innerHTML = '';
+                if(data.length === 0) { resultsBox.style.display = 'none'; return; }
+                data.forEach(c => {
+                    const li = document.createElement('li');
+                    li.className = 'list-group-item d-flex justify-content-between align-items-center py-2';
+                    const warningHtml = c.is_complete ? '' : '<span class="badge bg-warning text-dark ms-2" style="font-size:0.7rem;">⚠️ Incomplet</span>';
+                    
+                    li.innerHTML = `<div><strong style="color:var(--text-main);">${c.Nom}</strong> <span class="text-muted ms-2" style="font-size:0.8rem;">${c.ARRIVEE}</span>${warningHtml}</div> <span class="badge text-muted bg-light border">#${c.Dossard}</span>`;
+                    li.onclick = () => { 
+                        if (!c.is_complete) {
+                            alert(`Les données de la puce de ${c.Nom} sont incomplètes.\nLa simulation sur la carte et l'évolution du classement sont indisponibles.`);
+                        } else {
+                            addRunner(c.Dossard, currentYear); 
+                        }
+                        document.getElementById('searchInput').value = ''; 
+                        resultsBox.style.display = 'none'; 
+                    };
+                    resultsBox.appendChild(li);
+                });
+                resultsBox.style.display = 'block';
+            });
+        }
+        document.addEventListener('click', e => { if(e.target.id !== 'searchInput') document.getElementById('searchResults').style.display = 'none'; });
+
+        function searchAndAdd(dossardStr) {
+            if(dossardStr === "" || dossardStr === "None") return;
+            fetch(`/api/search?q=${dossardStr}&year=${currentYear}`).then(res => res.json()).then(data => {
+                if(data.length > 0) addRunner(data[0].Dossard, currentYear);
+            });
+        }
+
+        function startDuel() {
+            clearAll();
+            addRunner(vainqueurDosCurrent, '2026');
+            if(vainqueurDos2025 && vainqueurDos2025 !== 'None') {
+                setTimeout(() => { addRunner(vainqueurDos2025, '2025'); }, 200); 
+            }
+        }
+
+        function updateSliderMax() {
+            const runnersList = Object.values(runners);
+            if (runnersList.length === 0) { slider.max = 21600; return; }
+            let maxTime = 0;
+            runnersList.forEach(r => {
+                const timeline = r.data.Timeline;
+                const endTime = timeline[timeline.length - 1].sec;
+                if (endTime > maxTime) maxTime = endTime;
+            });
+            slider.max = Math.ceil(maxTime);
+            if (currentPlaybackTime > parseInt(slider.max)) {
+                currentPlaybackTime = parseInt(slider.max);
+                slider.value = currentPlaybackTime;
+                updatePositions(currentPlaybackTime);
+            }
+        }
+
+        function addRunner(dossard, targetYear) {
+            const uniqueId = `${dossard}-${targetYear}`;
+            if(runners[uniqueId]) return;
+            
+            fetch(`/api/replay/${dossard}?force_year=${targetYear}`).then(res => {
+                if(res.status === 400) {
+                    return res.json().then(errData => {
+                        alert(`⚠️ La puce de ${errData.Nom} (${targetYear}) n'a pas été détectée à tous les portiques.`);
+                        throw new Error("Incomplete");
+                    });
+                }
+                return res.json();
+            }).then(data => {
+                if(data.error) return;
+                const color = playerColors[markerColorIndex % playerColors.length];
+                markerColorIndex++;
+
+                const initialHtml = data.Nom.substring(0, 2).toUpperCase();
+                const icon = L.divIcon({ className: 'custom-div-icon', html: `<div class="runner-marker" style="background-color:${color}; width:24px; height:24px;">${initialHtml}</div>`, iconSize: [24, 24], iconAnchor: [12, 12] });
+                
+                const polyline = L.polyline([], {color: color, weight: 4, opacity: 0.9}).addTo(map);
+                const marker = L.marker([gpxTrack[0].lat, gpxTrack[0].lng], {icon: icon}).addTo(map);
+                marker.bindTooltip(`<b>${data.Nom}</b><br>Temps: ${data.Chrono}`, {direction: 'top'});
+
+                runners[uniqueId] = { data: data, marker: marker, polyline: polyline, color: color, id: uniqueId, year: targetYear };
+                
+                updateUI(); updateSliderMax(); updatePositions(currentPlaybackTime);
+            }).catch(e => { console.log(e); });
+        }
+
+        function removeRunner(uniqueId) {
+            if(!runners[uniqueId]) return;
+            map.removeLayer(runners[uniqueId].marker);
+            map.removeLayer(runners[uniqueId].polyline); 
+            delete runners[uniqueId];
+            updateUI(); updateSliderMax(); updatePositions(currentPlaybackTime); 
+        }
+
+        function clearAll() {
+            Object.values(runners).forEach(r => { map.removeLayer(r.marker); map.removeLayer(r.polyline); });
+            runners = {}; markerColorIndex = 0; updateUI(); updateSliderMax(); currentPlaybackTime = 0; slider.value = 0; updatePositions(0);
+        }
+
+        function updateUI() {
+            const box = document.getElementById('activeRunnersBox');
+            box.innerHTML = Object.values(runners).map(r => 
+                `<div class="runner-badge" style="background-color: ${r.color}">
+                    ${r.data.Nom}
+                    <span class="speed-pill" id="badge-speed-${r.id}">0.0 km/h</span>
+                    <span class="close-btn" onclick="removeRunner('${r.id}')" title="Retirer">✕</span>
+                </div>`
+            ).join('');
+
+            const labels_x = ['DÉPART', 'KM4', 'KM10', 'KM15', 'KM21', 'KM25', 'KM30', 'KM37', 'KM40', 'ARRIVEE'];
+
+            const ctxPace = document.getElementById('paceChart').getContext('2d');
+            if(paceChart) paceChart.destroy();
+            const paceDatasets = Object.values(runners).map(r => ({ label: r.data.Nom, data: r.data.Vitesses, borderColor: r.color, backgroundColor: r.color, tension: 0, fill: false, borderWidth: 3, pointRadius: 3 }));
+            paceChart = new Chart(ctxPace, { type: 'line', data: { labels: labels_x, datasets: paceDatasets }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: {display: false} }, scales: { x: { grid: { display: false }, ticks: {font: {size: 10}} }, y: { border: {display: false} } } } });
+
+            const ctxRank = document.getElementById('rankChart').getContext('2d');
+            if(rankChart) rankChart.destroy();
+            
+            const activeYears = new Set(Object.values(runners).map(r => r.year));
+            if (activeYears.size > 1) {
+                document.getElementById('rankChartContainer').style.display = 'none';
+                document.getElementById('rankChartWarning').style.setProperty('display', 'flex', 'important');
+            } else {
+                document.getElementById('rankChartContainer').style.display = 'block';
+                document.getElementById('rankChartWarning').style.setProperty('display', 'none', 'important');
+                
+                const rankDatasets = Object.values(runners).map(r => ({ label: r.data.Nom, data: r.data.Classements, borderColor: r.color, backgroundColor: r.color, tension: 0, fill: false, borderWidth: 3, pointRadius: 3, borderDash: [4, 4] }));
+                rankChart = new Chart(ctxRank, { type: 'line', data: { labels: labels_x, datasets: rankDatasets }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: {display: false}, tooltip: { backgroundColor: 'rgba(255, 255, 255, 0.95)', titleColor: textMain, bodyColor: textMain, borderColor: '#e2e8f0', borderWidth: 1, callbacks: { label: function(context) {
+                    if (context.raw === null) return ''; return `${context.dataset.label} : ${context.raw}e`;
+                }}}}, scales: { x: { grid: { display: false }, ticks: {font: {size: 10}} }, y: { reverse: true, border: {display: false}, ticks: { precision: 0 } } } } });
+            }
+        }
+
+        function formatTime(secs) { const h = Math.floor(secs / 3600); const m = Math.floor((secs % 3600) / 60); const s = Math.floor(secs % 60); return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`; }
+
+        function getDistanceAtTime(timeline, currentSec) {
+            if(currentSec === 0) return 0;
+            for(let i=0; i < timeline.length - 1; i++) {
+                if (currentSec >= timeline[i].sec && currentSec <= timeline[i+1].sec) {
+                    const prog = (currentSec - timeline[i].sec) / (timeline[i+1].sec - timeline[i].sec);
+                    return timeline[i].km + prog * (timeline[i+1].km - timeline[i].km);
+                }
+            }
+            return currentSec > timeline[timeline.length - 1].sec ? timeline[timeline.length - 1].km : 0;
+        }
+
+        function getCoordsForDistance(distKm) {
+            for(let i=0; i < gpxTrack.length - 1; i++) {
+                if(distKm >= gpxTrack[i].dist && distKm <= gpxTrack[i+1].dist) {
+                    const ratio = (distKm - gpxTrack[i].dist) / (gpxTrack[i+1].dist - gpxTrack[i].dist) || 0;
+                    const lat = gpxTrack[i].lat + ratio * (gpxTrack[i+1].lat - gpxTrack[i].lat);
+                    const lng = gpxTrack[i].lng + ratio * (gpxTrack[i+1].lng - gpxTrack[i].lng);
+                    const ele = gpxTrack[i].ele + ratio * (gpxTrack[i+1].ele - gpxTrack[i].ele);
+                    return {lat: lat, lng: lng, ele: ele};
+                }
+            }
+            const last = gpxTrack[gpxTrack.length-1]; return {lat: last.lat, lng: last.lng, ele: last.ele};
+        }
+
+        function updateSliderFill() { const percentage = slider.max > 0 ? (slider.value / slider.max) * 100 : 0; slider.style.background = `linear-gradient(to right, var(--nantes-red) ${percentage}%, #e2e8f0 ${percentage}%)`; }
+
+        function updatePositions(currentSec) {
+            document.getElementById('timeDisplay').innerText = "⏱️ " + formatTime(currentSec);
+            if(gpxTrack.length === 0) return;
+            const runnerEleDatasets = [];
+
+            Object.values(runners).forEach(r => {
+                const dist = getDistanceAtTime(r.data.Timeline, currentSec);
+                const coords = getCoordsForDistance(dist);
+                r.marker.setLatLng([coords.lat, coords.lng]);
+
+                let pathCoords = [];
+                for (let i = 0; i < gpxTrack.length; i++) { if (gpxTrack[i].dist <= dist) { pathCoords.push([gpxTrack[i].lat, gpxTrack[i].lng]); } else break; }
+                pathCoords.push([coords.lat, coords.lng]); r.polyline.setLatLngs(pathCoords);
+
+                let currentSpeed = 0;
+                if (currentSec >= r.data.Timeline[r.data.Timeline.length - 1].sec) currentSpeed = -1; 
+                else if (currentSec === 0) currentSpeed = r.data.Vitesses[0]; 
+                else { for(let i=0; i < r.data.Timeline.length - 1; i++) { if (currentSec >= r.data.Timeline[i].sec && currentSec <= r.data.Timeline[i+1].sec) { currentSpeed = r.data.Vitesses[i+1]; break; } } }
+
+                const speedPill = document.getElementById(`badge-speed-${r.id}`);
+                if (speedPill) { 
+                    if (currentSpeed === -1) { speedPill.innerText = '🏁 Arrivé'; speedPill.style.background = '#facc15'; } 
+                    else if (currentSpeed === null) { speedPill.innerText = '0.0 km/h'; }
+                    else { speedPill.innerText = `${currentSpeed.toFixed(1)} km/h`; speedPill.style.background = 'rgba(255,255,255,0.95)'; } 
+                }
+                runnerEleDatasets.push({ type: 'scatter', data: [{x: dist, y: coords.ele}], backgroundColor: r.color, borderColor: '#ffffff', borderWidth: 2, pointRadius: 5 });
+            });
+
+            if (elevationChart) { elevationChart.data.datasets = [elevationChart.data.datasets[0], ...runnerEleDatasets]; elevationChart.update(); }
+            updateSliderFill();
+        }
+
+        slider.addEventListener('input', (e) => { currentPlaybackTime = parseFloat(e.target.value); updatePositions(currentPlaybackTime); });
+        
+        const speedSlider = document.getElementById('speedSlider');
+        speedSlider.addEventListener('input', (e) => { const percentage = ((e.target.value - e.target.min) / (e.target.max - e.target.min)) * 100; e.target.style.background = `linear-gradient(to right, var(--nantes-red) ${percentage}%, #e2e8f0 ${percentage}%)`; });
+        const initSpeedPercentage = ((speedSlider.value - speedSlider.min) / (speedSlider.max - speedSlider.min)) * 100;
+        speedSlider.style.background = `linear-gradient(to right, var(--nantes-red) ${initSpeedPercentage}%, #e2e8f0 ${initSpeedPercentage}%)`;
+
+        function restartReplay() { currentPlaybackTime = 0; slider.value = 0; updatePositions(0); }
+        function togglePlay() {
+            const btn = document.getElementById('playBtn');
+            if(isPlaying) { clearInterval(playInterval); btn.innerHTML = "▶️ Lecture"; btn.classList.replace('btn-dark', 'btn-danger'); isPlaying = false; } 
+            else {
+                btn.innerHTML = "⏸️ Pause"; btn.classList.replace('btn-danger', 'btn-dark'); isPlaying = true;
+                playInterval = setInterval(() => {
+                    currentPlaybackTime += (BASE_SPEED_STEP * parseFloat(speedSlider.value));
+                    if(currentPlaybackTime >= parseInt(slider.max)) { currentPlaybackTime = parseInt(slider.max); slider.value = currentPlaybackTime; updatePositions(currentPlaybackTime); togglePlay(); return; }
+                    slider.value = currentPlaybackTime; updatePositions(currentPlaybackTime);
+                }, 50);
+            }
+        }
+    </script>
+</body>
+</html>
